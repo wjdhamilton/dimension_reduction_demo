@@ -1,0 +1,16 @@
+#!/bin/sh
+
+
+tmux split-window -h 
+tmux split-window -v 35
+tmux selectp -t 0
+tmux send-keys "nvim $1" enter
+tmux selectp -t 1
+tmux send-keys "bin/webpack-dev-server" enter
+tmux split-window -v
+tmux split-window -h
+tmux selectp 3
+tmux send-keys "rails s" enter
+tmux break-pane
+
+tmus send-keys 'open localhost:3000'
