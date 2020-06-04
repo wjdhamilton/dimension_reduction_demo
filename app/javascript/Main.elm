@@ -1,11 +1,17 @@
 module Main exposing (..)
 
+import Axis
 import Browser
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
 import Maybe.Extra as M
 import Random as R
+import Scale exposing (ContinuousScale)
+import Svg exposing (Svg)
+import Svg.Attributes as SvgA
+import TypedSvg.Attributes exposing (transform)
+import TypedSvg.Types exposing (Transform(..))
 
 
 
@@ -25,11 +31,11 @@ type alias Model =
 -- INIT
 
 
-init : ( Model, Cmd Message )
+init : ( Model, Cmd Msg )
 init =
     ( Model
-        []
-        []
+        [ 2.31, 1.56, 5.48, 0.03, 6.13, 2.36, 2.14, 2.01, 2.11, 4.57 ]
+        [ 4.58, 4.27, 5.61, 1.49, 6.07, 4.75, 4.3, 4.37, 4.43, 4.87 ]
         "2.31, 1.56, 5.48, 0.03, 6.13, 2.36, 2.14, 2.01, 2.11, 4.57"
         "4.58, 4.27, 5.61, 1.49, 6.07, 4.75, 4.30, 4.37, 4.43, 4.87"
         []
@@ -41,7 +47,7 @@ init =
 -- MESSAGE
 
 
-type Message
+type Msg
     = None
     | UpdateXs String
     | UpdateYs String
@@ -60,7 +66,7 @@ type Message
 -- Allow user to tinker with weights to see how to they change chart.
 
 
-update : Message -> Model -> ( Model, Cmd Message )
+update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case message of
         UpdateXs s ->
@@ -122,7 +128,7 @@ parseFloats s =
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model -> Sub Message
+subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.none
 
@@ -131,7 +137,7 @@ subscriptions model =
 -- MAIN
 
 
-main : Program (Maybe {}) Model Message
+main : Program (Maybe {}) Model Msg
 main =
     Browser.element
         { init = always init
@@ -145,15 +151,14 @@ main =
 -- VIEW
 
 
-view : Model -> H.Html Message
+view : Model -> H.Html Msg
 view model =
-    -- The inline style is being used for example purposes in order to keep this example simple and
-    -- avoid loading additional resources. Use a proper stylesheet when building your own app.
     H.div []
         [ H.div [ A.class "row" ]
             [ H.div [ A.class "col" ]
                 [ H.textarea
                     [ A.placeholder "xs"
+                    , A.value model.xInput
                     , E.onInput UpdateXs
                     , A.class "form-control"
                     ]
@@ -164,6 +169,7 @@ view model =
             [ H.div [ A.class "col" ]
                 [ H.textarea
                     [ A.placeholder "ys"
+                    , A.value model.yInput
                     , E.onInput UpdateYs
                     , A.class "form-control"
                     ]
@@ -180,9 +186,107 @@ view model =
                     ]
                 ]
             ]
+        , H.div [ A.class "row" ]
+            [ H.div [ A.class "col" ]
+                [ chart model.xs model.ys ]
+            , H.div [ A.class "col" ]
+                [ chart model.xs model.ys ]
+            , H.div [ A.class "col" ]
+                [ H.div [ A.class "row" ]
+                    [ H.div [ A.class "col" ]
+                        [ H.text "up" ]
+                    , H.div [ A.class "row" ]
+                        [ H.div [ A.class "col" ]
+                            [ H.text "down" ]
+                        ]
+                    ]
+                ]
+            ]
         ]
 
 
-noCmd : Model -> ( Model, Cmd Message )
+chartWidth =
+    xAxLength + 50
+
+
+chartHeight =
+    yAxLength + 50
+
+
+chart : List Float -> List Float -> Svg Msg
+chart xs ys =
+    Svg.svg
+        [ SvgA.width (String.fromInt chartWidth)
+        , SvgA.height (String.fromInt chartHeight)
+        , SvgA.viewBox ("0 0 " ++ String.fromFloat chartWidth ++ " " ++ String.fromFloat chartHeight)
+        ]
+        (drawChart xs ys)
+
+
+drawChart : List Float -> List Float -> List (Svg Msg)
+drawChart xs ys =
+    let
+        min =
+            Maybe.withDefault 1 << List.minimum
+
+        max =
+            Maybe.withDefault 1 << List.maximum
+
+        ySc =
+            yScale ( max ys, min ys )
+
+        xSc =
+            xScale ( min xs, max xs )
+
+        ys_ =
+            List.map (Scale.convert ySc) ys
+                |> List.map String.fromFloat
+
+        xs_ =
+            List.map (Scale.convert xSc) xs
+                |> List.map String.fromFloat
+
+        xys =
+            List.map2 Tuple.pair xs_ ys_
+
+        drawPoint ( x, y ) =
+            Svg.circle
+                [ SvgA.cx x
+                , SvgA.cy y
+                , SvgA.r "5"
+                , transform [ Translate 20 0 ]
+                ]
+                []
+    in
+    Svg.g [ transform [ Translate 20 0 ] ] [ Axis.left [ Axis.tickCount 10 ] ySc ]
+        :: Svg.g [ transform [ Translate 20 500 ] ] [ Axis.bottom [ Axis.tickCount 10 ] xSc ]
+        :: List.map drawPoint xys
+
+
+yAxLength =
+    500
+
+
+yScale : ( Float, Float ) -> ContinuousScale Float
+yScale =
+    makeScale yAxLength
+
+
+xAxLength =
+    500
+
+
+xScale : ( Float, Float ) -> ContinuousScale Float
+xScale =
+    makeScale xAxLength
+
+
+makeScale : Float -> ( Float, Float ) -> ContinuousScale Float
+makeScale length domain =
+    Scale.linear ( 0, length ) domain
+        |> Scale.nice 1
+
+
+noCmd : Model -> ( Model, Cmd Msg )
 noCmd m =
     ( m, Cmd.none )
