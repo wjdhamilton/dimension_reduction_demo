@@ -60,8 +60,6 @@ type Msg
     = None
     | UpdateXs String
     | UpdateYs String
-    | ParseXs
-    | ParseYs
     | ParseData
     | UpdateD1Alpha1 String
     | UpdateD1Alpha2 String
@@ -82,46 +80,26 @@ update message model =
     case message of
         UpdateXs s ->
             { model | xInput = s }
-                |> noCmd
-
-        ParseXs ->
-            let
-                maybeXs =
-                    parseFloats model.xInput
-            in
-            case maybeXs of
-                Nothing ->
-                    { model | errors = "xS must be comma seperated values" :: model.errors }
-                        |> noCmd
-
-                Just newXs ->
-                    { model | xs = newXs }
-                        |> noCmd
+                |> update ParseData
 
         UpdateYs s ->
             { model | yInput = s }
-                |> noCmd
-
-        ParseYs ->
-            let
-                maybeYs =
-                    parseFloats model.yInput
-            in
-            case maybeYs of
-                Nothing ->
-                    { model | errors = "ys must be comma seperated values" :: model.errors }
-                        |> noCmd
-
-                Just newYs ->
-                    { model | ys = newYs }
-                        |> noCmd
+                |> update ParseData
 
         ParseData ->
-            update ParseXs model
-                |> Tuple.first
-                |> update ParseYs
-                |> Tuple.first
-                |> noCmd
+            let
+                result =
+                    Result.map2 (\xs ys -> { model | xs = xs, ys = ys })
+                        (parseFloats model.xInput "xs must be comma separated values")
+                        (parseFloats model.yInput "ys must be comma separated values")
+            in
+            case result of
+                Ok m ->
+                    noCmd m
+
+                Err e ->
+                    { model | errors = [ e ] }
+                        |> noCmd
 
         UpdateD1Alpha1 v ->
             let
@@ -155,12 +133,18 @@ update message model =
             noCmd model
 
 
-parseFloats : String -> Maybe (List Float)
-parseFloats s =
-    String.split "," s
-        |> List.map (String.toFloat << String.trim)
-        |> Debug.log "ys"
-        |> M.combine
+parseFloats : String -> String -> Result String (List Float)
+parseFloats s e =
+    case
+        String.split "," s
+            |> List.map (String.toFloat << String.trim)
+            |> M.combine
+    of
+        Nothing ->
+            Err e
+
+        Just r ->
+            Ok r
 
 
 
