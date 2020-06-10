@@ -13,4 +13,6 @@ tmux selectp 3
 tmux send-keys "rails s" enter
 tmux break-pane
 
-tmus send-keys 'open localhost:3000'
+tmux selectp -t 0
+
+tmux send-keys 'open localhost:3000'

@@ -2,12 +2,15 @@ module Main exposing (..)
 
 import Axis
 import Browser
+import Data
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
 import Maybe.Extra as M
+import Path
 import Random as R
 import Scale exposing (ContinuousScale)
+import Shape
 import Statistics as Stats
 import Svg exposing (Svg)
 import Svg.Attributes as SvgA
@@ -29,6 +32,7 @@ type alias Model =
     , errors : List String
     , d1Alpha1 : Float
     , d1Alpha2 : Float
+    , variance : Maybe Float
     }
 
 
@@ -38,18 +42,18 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model
-        [ 2.31, 1.56, 5.48, 0.03, 6.13, 2.36, 2.14, 2.01, 2.11, 4.57 ]
-        [ 4.58, 4.27, 5.61, 1.49, 6.07, 4.75, 4.3, 4.37, 4.43, 4.87 ]
-        [ 2.31, 1.56, 5.48, 0.03, 6.13, 2.36, 2.14, 2.01, 2.11, 4.57 ]
-        [ 4.58, 4.27, 5.61, 1.49, 6.07, 4.75, 4.3, 4.37, 4.43, 4.87 ]
-        "2.31, 1.56, 5.48, 0.03, 6.13, 2.36, 2.14, 2.01, 2.11, 4.57"
-        "4.58, 4.27, 5.61, 1.49, 6.07, 4.75, 4.30, 4.37, 4.43, 4.87"
+    Model
+        []
+        []
+        []
+        []
+        ""
+        ""
         []
         1
         1
-    , Cmd.none
-    )
+        Nothing
+        |> update (LoadDataSet Data.InterestRates)
 
 
 
@@ -63,16 +67,7 @@ type Msg
     | ParseData
     | UpdateD1Alpha1 String
     | UpdateD1Alpha2 String
-
-
-
--- UPDATE
--- TODO: We want to:
--- Gather data
--- plot it as scatterplot
--- calculate first component
--- replot with first component (perhaps on second chart?)
--- Allow user to tinker with weights to see how to they change chart.
+    | LoadDataSet Data.DataName
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -103,34 +98,70 @@ update message model =
 
         UpdateD1Alpha1 v ->
             let
-                new =
+                d1a1 =
                     Maybe.withDefault 1.0 (String.toFloat v)
 
-                transformed =
-                    List.map (\x -> x * new) model.xs
+                d1a2 =
+                    findLoading d1a1
+
+                transformedX =
+                    List.map (\x -> x * d1a1) model.xs
+
+                transformedY =
+                    List.map (\x -> x * d1a2) model.ys
             in
             { model
-                | d1Alpha1 = new
-                , d1x = transformed
+                | d1Alpha1 = d1a1
+                , d1Alpha2 = d1a2
+                , d1x = transformedX
+                , d1y = transformedY
             }
                 |> noCmd
 
         UpdateD1Alpha2 v ->
             let
-                new =
+                d1a2 =
                     Maybe.withDefault 1.0 (String.toFloat v)
 
-                transformed =
-                    List.map (\y -> y * new) model.ys
+                d1a1 =
+                    findLoading d1a2
+
+                transformedX =
+                    List.map (\x -> x * d1a1) model.xs
+
+                transformedY =
+                    List.map (\x -> x * d1a2) model.ys
             in
             { model
-                | d1Alpha2 = new
-                , d1y = transformed
+                | d1Alpha1 = d1a1
+                , d1Alpha2 = d1a2
+                , d1x = transformedX
+                , d1y = transformedY
+            }
+                |> noCmd
+
+        LoadDataSet n ->
+            let
+                dataSet =
+                    Data.findDataSet n
+            in
+            { model
+                | xs = dataSet.x1
+                , ys = dataSet.x2
+                , d1x = List.map (\x -> x * dataSet.alpha1) dataSet.x1
+                , d1y = List.map (\x -> x * dataSet.alpha2) dataSet.x2
+                , d1Alpha1 = dataSet.alpha1
+                , d1Alpha2 = dataSet.alpha2
             }
                 |> noCmd
 
         None ->
             noCmd model
+
+
+findLoading : Float -> Float
+findLoading w =
+    Basics.sqrt (1 - w ^ 2)
 
 
 parseFloats : String -> String -> Result String (List Float)
@@ -179,7 +210,8 @@ view model =
     H.div []
         [ H.div [ A.class "row" ]
             [ H.div [ A.class "col" ]
-                [ H.textarea
+                [ H.label [] [ H.text "X1" ]
+                , H.textarea
                     [ A.placeholder "xs"
                     , A.value model.xInput
                     , E.onInput UpdateXs
@@ -190,7 +222,8 @@ view model =
             ]
         , H.div [ A.class "row" ]
             [ H.div [ A.class "col" ]
-                [ H.textarea
+                [ H.label [] [ H.text "X2" ]
+                , H.textarea
                     [ A.placeholder "ys"
                     , A.value model.yInput
                     , E.onInput UpdateYs
@@ -199,16 +232,7 @@ view model =
                     []
                 ]
             ]
-        , H.div [ A.class "row" ]
-            [ H.div [ A.class "col" ]
-                [ H.button
-                    [ A.class "btn btn-primary"
-                    , E.onClick ParseData
-                    ]
-                    [ H.text "Chart"
-                    ]
-                ]
-            ]
+        , H.hr [] []
         , H.div [ A.class "row" ]
             [ H.div [ A.class "col" ]
                 [ chart model ]
@@ -217,11 +241,54 @@ view model =
                     [ H.div [ A.class "col" ]
                         [ H.div [ A.class "row" ]
                             [ H.div [ A.class "col" ]
-                                [ coefficientInput model.d1Alpha1 UpdateD1Alpha1 ]
+                                [ H.label [] [ H.text "alpha 1" ]
+                                , coefficientInput model.d1Alpha1 UpdateD1Alpha1
+                                ]
                             ]
                         , H.div [ A.class "row" ]
                             [ H.div [ A.class "col" ]
-                                [ coefficientInput model.d1Alpha2 UpdateD1Alpha2 ]
+                                [ H.label [] [ H.text "alpha 2" ]
+                                , coefficientInput model.d1Alpha2 UpdateD1Alpha2
+                                ]
+                            ]
+                        , H.div [ A.class "row" ]
+                            [ H.div [ A.class "col" ]
+                                [ H.label [] [ H.text "X1 Variance" ]
+                                , H.p []
+                                    [ H.text
+                                        (Maybe.withDefault ""
+                                            (variance model.xs
+                                                |> Maybe.andThen (Just << String.fromFloat)
+                                            )
+                                        )
+                                    ]
+                                ]
+                            ]
+                        , H.div [ A.class "row" ]
+                            [ H.div [ A.class "col" ]
+                                [ H.label [] [ H.text "X2 Variance" ]
+                                , H.p []
+                                    [ H.text
+                                        (Maybe.withDefault ""
+                                            (variance model.ys
+                                                |> Maybe.andThen (Just << String.fromFloat)
+                                            )
+                                        )
+                                    ]
+                                ]
+                            ]
+                        , H.div [ A.class "row" ]
+                            [ H.div [ A.class "col" ]
+                                [ H.label [] [ H.text "D1 Variance" ]
+                                , H.p []
+                                    [ H.text
+                                        (Maybe.withDefault ""
+                                            (variance (calcPCA model)
+                                                |> Maybe.andThen (Just << String.fromFloat)
+                                            )
+                                        )
+                                    ]
+                                ]
                             ]
                         ]
                     ]
@@ -234,19 +301,24 @@ coefficientInput : Float -> (String -> Msg) -> H.Html Msg
 coefficientInput v f =
     H.input
         [ A.type_ "number"
-
-        -- , A.value (String.fromFloat v)
+        , A.class "form-control"
+        , A.step "0.01"
         , E.onInput f
+        , A.value (String.fromFloat v)
         ]
         []
 
 
+chartPadding =
+    50
+
+
 chartWidth =
-    xAxLength + 50
+    xAxLength + chartPadding
 
 
 chartHeight =
-    yAxLength + 50
+    yAxLength + chartPadding
 
 
 chart : Model -> Svg Msg
@@ -260,7 +332,7 @@ chart model =
 
 
 drawChart : Model -> List (Svg Msg)
-drawChart { xs, ys, d1x, d1y } =
+drawChart { xs, ys, d1x, d1y, d1Alpha1, d1Alpha2 } =
     let
         forSvg scale vals =
             List.map (Scale.convert scale) vals
@@ -272,19 +344,28 @@ drawChart { xs, ys, d1x, d1y } =
         max =
             Maybe.withDefault 1 << List.maximum
 
+        allYs =
+            ys
+
+        allXs =
+            xs
+
         ySc =
-            let
-                combo =
-                    ys ++ d1y
-            in
-            yScale ( max combo, min combo )
+            yScale ( max allYs, min allYs )
 
         xSc =
-            let
-                combo =
-                    xs ++ d1x
-            in
-            xScale ( min combo, max combo )
+            xScale ( min allXs, max allXs )
+
+        d_fit =
+            Stats.range (min <| allYs ++ allXs) (max <| allYs ++ allXs) 1
+                |> List.map
+                    (\x ->
+                        Just
+                            ( Scale.convert xSc (d1Alpha1 * x)
+                            , Scale.convert ySc (d1Alpha2 * x)
+                            )
+                    )
+                |> Debug.log "d_fit"
 
         ys_ =
             forSvg ySc ys
@@ -304,6 +385,16 @@ drawChart { xs, ys, d1x, d1y } =
         d1xys =
             List.map2 Tuple.pair d1x_ d1y_
 
+        alphaFit =
+            d_fit
+                |> Shape.line Shape.linearCurve
+                |> (\x ->
+                        Path.element x
+                            [ SvgA.stroke "blue"
+                            , transform [ Translate 20 10 ]
+                            ]
+                   )
+
         drawPoint c ( x, y ) =
             Svg.circle
                 [ SvgA.cx x
@@ -315,9 +406,16 @@ drawChart { xs, ys, d1x, d1y } =
                 , transform [ Translate 20 0 ]
                 ]
                 []
+
+        yAxis =
+            Svg.g [ transform [ Translate 20 10 ] ] [ Axis.left [ Axis.tickCount 10 ] ySc ]
+
+        xAxis =
+            Svg.g [ transform [ Translate 20 510 ] ] [ Axis.bottom [ Axis.tickCount 10 ] xSc ]
     in
-    Svg.g [ transform [ Translate 20 0 ] ] [ Axis.left [ Axis.tickCount 10 ] ySc ]
-        :: Svg.g [ transform [ Translate 20 500 ] ] [ Axis.bottom [ Axis.tickCount 10 ] xSc ]
+    xAxis
+        :: yAxis
+        -- :: alphaFit
         :: List.map (drawPoint "black") xys
         ++ List.map (drawPoint "red") d1xys
 
@@ -349,3 +447,26 @@ makeScale length domain =
 noCmd : Model -> ( Model, Cmd Msg )
 noCmd m =
     ( m, Cmd.none )
+
+
+calcPCA : Model -> List Float
+calcPCA model =
+    let
+        x1 =
+            model.xs
+
+        x2 =
+            model.ys
+
+        x1x2 =
+            List.map2 Tuple.pair x1 x2
+
+        pca =
+            List.map (\( a, b ) -> a * model.d1Alpha1 + b * model.d1Alpha2) x1x2
+    in
+    pca
+
+
+variance : List Float -> Maybe Float
+variance fs =
+    Stats.variance fs
