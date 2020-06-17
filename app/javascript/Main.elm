@@ -9,6 +9,7 @@ import Html.Events as E
 import Maybe.Extra as M
 import Path
 import Random as R
+import Round
 import Scale exposing (ContinuousScale)
 import Shape
 import Statistics as Stats
@@ -251,45 +252,9 @@ view model =
                                 , coefficientInput model.d1Alpha2 UpdateD1Alpha2
                                 ]
                             ]
-                        , H.div [ A.class "row" ]
-                            [ H.div [ A.class "col" ]
-                                [ H.label [] [ H.text "X1 Variance" ]
-                                , H.p []
-                                    [ H.text
-                                        (Maybe.withDefault ""
-                                            (variance model.xs
-                                                |> Maybe.andThen (Just << String.fromFloat)
-                                            )
-                                        )
-                                    ]
-                                ]
-                            ]
-                        , H.div [ A.class "row" ]
-                            [ H.div [ A.class "col" ]
-                                [ H.label [] [ H.text "X2 Variance" ]
-                                , H.p []
-                                    [ H.text
-                                        (Maybe.withDefault ""
-                                            (variance model.ys
-                                                |> Maybe.andThen (Just << String.fromFloat)
-                                            )
-                                        )
-                                    ]
-                                ]
-                            ]
-                        , H.div [ A.class "row" ]
-                            [ H.div [ A.class "col" ]
-                                [ H.label [] [ H.text "D1 Variance" ]
-                                , H.p []
-                                    [ H.text
-                                        (Maybe.withDefault ""
-                                            (variance (calcPCA model)
-                                                |> Maybe.andThen (Just << String.fromFloat)
-                                            )
-                                        )
-                                    ]
-                                ]
-                            ]
+                        , displayVariance "X1 Variance" model.xs
+                        , displayVariance "X2 Variance" model.ys
+                        , displayVariance "Y1 Variance" (calcPCA model)
                         ]
                     ]
                 ]
@@ -307,6 +272,23 @@ coefficientInput v f =
         , A.value (String.fromFloat v)
         ]
         []
+
+
+displayVariance : String -> List Float -> H.Html Msg
+displayVariance title value =
+    H.div [ A.class "row" ]
+        [ H.div [ A.class "col" ]
+            [ H.label [] [ H.text title ]
+            , H.p []
+                [ H.text
+                    (Maybe.withDefault ""
+                        (variance value
+                            |> Maybe.andThen (Just << Round.round 3)
+                        )
+                    )
+                ]
+            ]
+        ]
 
 
 chartPadding =
