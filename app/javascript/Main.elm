@@ -15,8 +15,8 @@ import Shape
 import Statistics as Stats
 import Svg exposing (Svg)
 import Svg.Attributes as SvgA
-import TypedSvg.Attributes exposing (transform)
-import TypedSvg.Types exposing (Transform(..))
+import TypedSvg.Attributes exposing (fill, transform)
+import TypedSvg.Types exposing (Paint(..), Transform(..))
 
 
 
@@ -254,7 +254,7 @@ view model =
                             ]
                         , displayVariance "X1 Variance" model.xs
                         , displayVariance "X2 Variance" model.ys
-                        , displayVariance "Y1 Variance" (calcPCA model)
+                        , displayVariance "D1 Variance" (calcPCA model)
                         ]
                     ]
                 ]
@@ -367,15 +367,11 @@ drawChart { xs, ys, d1x, d1y, d1Alpha1, d1Alpha2 } =
         d1xys =
             List.map2 Tuple.pair d1x_ d1y_
 
-        alphaFit =
-            d_fit
-                |> Shape.line Shape.linearCurve
-                |> (\x ->
-                        Path.element x
-                            [ SvgA.stroke "blue"
-                            , transform [ Translate 20 10 ]
-                            ]
-                   )
+        dataFit =
+            leastSquares xSc ySc xs ys "black"
+
+        d1Fit =
+            leastSquares xSc ySc d1x d1y "red"
 
         drawPoint c ( x, y ) =
             Svg.circle
@@ -397,9 +393,30 @@ drawChart { xs, ys, d1x, d1y, d1Alpha1, d1Alpha2 } =
     in
     xAxis
         :: yAxis
-        -- :: alphaFit
+        :: dataFit
+        :: d1Fit
         :: List.map (drawPoint "black") xys
         ++ List.map (drawPoint "red") d1xys
+
+
+leastSquares : ContinuousScale Float -> ContinuousScale Float -> List Float -> List Float -> String -> Svg Msg
+leastSquares xSc ySc xs ys colour =
+    let
+        ( xMin, xMax ) =
+            Scale.range xSc
+    in
+    leastSquaresLine xs ys xMin xMax
+        |> List.map2 Tuple.pair (Scale.ticks xSc 10)
+        |> List.map (\( x, y ) -> Just ( Scale.convert xSc x, Scale.convert ySc y ))
+        |> Shape.line Shape.linearCurve
+        |> (\path ->
+                Path.element path
+                    [ SvgA.stroke colour
+                    , fill PaintNone
+                    , SvgA.strokeWidth "2"
+                    , transform [ Translate 20 0 ]
+                    ]
+           )
 
 
 yAxLength =
@@ -452,3 +469,50 @@ calcPCA model =
 variance : List Float -> Maybe Float
 variance fs =
     Stats.variance fs
+
+
+leastSquaresLine : List Float -> List Float -> Float -> Float -> List Float
+leastSquaresLine xs ys min max =
+    let
+        beta =
+            sXY xs ys / sXX xs
+
+        overX =
+            mean xs
+
+        overY =
+            mean ys
+
+        r =
+            Stats.range min max 1
+    in
+    List.map (\x -> overY + (beta * (x - overX))) r
+
+
+sXX : List Float -> Float
+sXX xs =
+    let
+        meanX =
+            mean xs
+    in
+    List.sum << List.map (\x -> (x - meanX) ^ 2) <| xs
+
+
+sXY : List Float -> List Float -> Float
+sXY xs ys =
+    let
+        meanX =
+            mean xs
+
+        meanY =
+            mean ys
+
+        xys =
+            List.map2 Tuple.pair xs ys
+    in
+    List.sum << List.map (\( x, y ) -> (x - meanX) * (y - meanY)) <| xys
+
+
+mean : List Float -> Float
+mean ns =
+    List.sum ns / (toFloat <| List.length ns)
