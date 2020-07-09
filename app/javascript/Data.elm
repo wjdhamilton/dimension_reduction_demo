@@ -1,4 +1,4 @@
-module Data exposing (DataName(..), DataSet, findDataSet)
+module Data exposing (DataName(..), DataSet, dataNames, findDataSet, toString)
 
 import Dict
 
@@ -28,6 +28,14 @@ type DataName
     = InterestRates
     | LandCover
     | HousePriceAndIncome
+
+
+dataNames : List DataName
+dataNames =
+    [ InterestRates
+    , LandCover
+    , HousePriceAndIncome
+    ]
 
 
 toString : DataName -> String

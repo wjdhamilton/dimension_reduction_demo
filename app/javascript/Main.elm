@@ -12,6 +12,7 @@ import Path
 import Round
 import Scale exposing (ContinuousScale)
 import Shape
+import SingleSelect as Select
 import Statistics as Stats
 import Svg exposing (Svg)
 import Svg.Attributes as SvgA
@@ -42,6 +43,8 @@ type alias Model =
     , d2Alpha1 : Float
     , d2Alpha2 : Float
     , variance : Maybe Float
+    , select : Select.SmartSelect Msg Data.DataName
+    , selectedDataSet : Data.DataName
     }
 
 
@@ -70,6 +73,10 @@ init =
         1
         1
         Nothing
+        (Select.init
+            { selectionMsg = SelectDataSet, internalMsg = HandleSelectDataSet }
+        )
+        Data.InterestRates
         |> update (LoadDataSet Data.InterestRates)
 
 
@@ -87,6 +94,8 @@ type Msg
     | UpdateD2Alpha1 String
     | UpdateD2Alpha2 String
     | LoadDataSet Data.DataName
+    | HandleSelectDataSet (Select.Msg Data.DataName)
+    | SelectDataSet ( Data.DataName, Select.Msg Data.DataName )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -187,11 +196,27 @@ update message model =
                 , d1Alpha2 = dataSet.alpha12
                 , d2Alpha1 = dataSet.alpha21
                 , d2Alpha2 = dataSet.alpha22
+                , selectedDataSet = n
             }
                 |> noCmd
 
         None ->
             noCmd model
+
+        HandleSelectDataSet sMsg ->
+            let
+                ( updatedSelect, selectCmd ) =
+                    Select.update sMsg model.select
+            in
+            ( { model | select = updatedSelect }, selectCmd )
+
+        SelectDataSet ( selection, sMsg ) ->
+            let
+                ( updatedSelect, selectCmd ) =
+                    Select.update sMsg model.select
+            in
+            { model | select = updatedSelect }
+                |> update (LoadDataSet selection)
 
 
 changeWeight : String -> List Float -> ( Float, List Float )
@@ -254,93 +279,98 @@ main =
 
 view : Model -> Document Msg
 view model =
-    { title = "Dimension Reduction Demo"
-    , body =
-        H.div []
-            [ H.div [ A.class "row" ]
-                [ H.div [ A.class "col" ]
-                    [ H.h1 [] [ H.text "Principle Component Analysis" ] ]
-                ]
-            , H.div [ A.class "row" ]
-                [ H.div [ A.class "col" ]
-                    [ H.h2 [] [ H.text "X1" ]
-                    , H.textarea
-                        [ A.placeholder "xs"
-                        , A.value model.xInput
-                        , E.onInput UpdateXs
-                        , A.class "form-control"
-                        ]
-                        []
-                    ]
-                ]
-            , H.div [ A.class "row" ]
-                [ H.div [ A.class "col" ]
-                    [ H.h2 [] [ H.text "X2" ]
-                    , H.textarea
-                        [ A.placeholder "ys"
-                        , A.value model.yInput
-                        , E.onInput UpdateYs
-                        , A.class "form-control"
-                        ]
-                        []
-                    ]
-                ]
-            , H.hr [] []
-            , H.div [ A.class "row" ]
-                [ H.div [ A.class "col" ]
-                    [ chart model ]
-                , H.div [ A.class "col" ]
-                    [ H.div [ A.class "row" ]
-                        [ H.div [ A.class "col" ]
-                            [ H.div [ A.class "row" ]
-                                [ H.div [ A.class "col" ]
-                                    [ H.label [] [ H.text "\\(\\alpha_{11}\\)" ]
-                                    , coefficientInput model.a11Input UpdateD1Alpha1
-                                    ]
-                                ]
-                            , H.div [ A.class "row" ]
-                                [ H.div [ A.class "col" ]
-                                    [ H.label [] [ H.text "\\(\\alpha_{12}\\)" ]
-                                    , coefficientInput model.a12Input UpdateD1Alpha2
-                                    ]
-                                ]
-                            , H.div [ A.class "row" ]
-                                [ H.div [ A.class "col" ]
-                                    [ H.label [] [ H.text "\\(\\alpha_{22}\\)" ]
-                                    , coefficientInput model.a21Input UpdateD2Alpha1
-                                    ]
-                                ]
-                            , H.div [ A.class "row" ]
-                                [ H.div [ A.class "col" ]
-                                    [ H.label [] [ H.text "\\(\\alpha_{22}\\)" ]
-                                    , coefficientInput model.a22Input UpdateD2Alpha2
-                                    ]
-                                ]
-                            , let
-                                d1 =
-                                    List.map2 (+) model.d1x model.d1y
+    let
+        title =
+            "Dimension Reduction Demo"
 
-                                d2 =
-                                    List.map2 (+) model.d2x model.d2y
-                              in
-                              H.div [ A.class "row mt-5" ]
-                                [ H.div [ A.class "col border border-primary" ]
-                                    [ displayVariance "X1 Variance" model.xs
-                                    , displayVariance "X2 Variance" model.ys
-                                    , displayVariance "D1 Variance" (List.map2 (+) model.d1x model.d1y)
-                                    , displayVariance "D2 Variance" (List.map2 (+) model.d2x model.d2y)
-                                    , H.div [ A.class "row" ]
-                                        [ H.div [ A.class "col" ]
-                                            [ H.label [] [ H.text "Corr(D1,D2)" ]
-                                            , H.p []
-                                                [ H.text (Round.round 3 (correlation d1 d2))
+        body =
+            H.div []
+                [ H.div [ A.class "row" ]
+                    [ H.div [ A.class "col" ]
+                        [ H.h1 [] [ H.text "Principle Component Analysis" ] ]
+                    ]
+                , Select.view { selected = Just model.selectedDataSet, options = Data.dataNames, optionLabelFn = Data.toString } model.select
+                , H.div [ A.class "row" ]
+                    [ H.div [ A.class "col" ]
+                        [ H.h2 [] [ H.text "X1" ]
+                        , H.textarea
+                            [ A.placeholder "xs"
+                            , A.value model.xInput
+                            , E.onInput UpdateXs
+                            , A.class "form-control"
+                            ]
+                            []
+                        ]
+                    ]
+                , H.div [ A.class "row" ]
+                    [ H.div [ A.class "col" ]
+                        [ H.h2 [] [ H.text "X2" ]
+                        , H.textarea
+                            [ A.placeholder "ys"
+                            , A.value model.yInput
+                            , E.onInput UpdateYs
+                            , A.class "form-control"
+                            ]
+                            []
+                        ]
+                    ]
+                , H.hr [] []
+                , H.div [ A.class "row" ]
+                    [ H.div [ A.class "col" ]
+                        [ chart model ]
+                    , H.div [ A.class "col" ]
+                        [ H.div [ A.class "row" ]
+                            [ H.div [ A.class "col" ]
+                                [ H.div [ A.class "row" ]
+                                    [ H.div [ A.class "col" ]
+                                        [ H.label [] [ H.text "\\(\\alpha_{11}\\)" ]
+                                        , coefficientInput model.a11Input UpdateD1Alpha1
+                                        ]
+                                    ]
+                                , H.div [ A.class "row" ]
+                                    [ H.div [ A.class "col" ]
+                                        [ H.label [] [ H.text "\\(\\alpha_{12}\\)" ]
+                                        , coefficientInput model.a12Input UpdateD1Alpha2
+                                        ]
+                                    ]
+                                , H.div [ A.class "row" ]
+                                    [ H.div [ A.class "col" ]
+                                        [ H.label [] [ H.text "\\(\\alpha_{22}\\)" ]
+                                        , coefficientInput model.a21Input UpdateD2Alpha1
+                                        ]
+                                    ]
+                                , H.div [ A.class "row" ]
+                                    [ H.div [ A.class "col" ]
+                                        [ H.label [] [ H.text "\\(\\alpha_{22}\\)" ]
+                                        , coefficientInput model.a22Input UpdateD2Alpha2
+                                        ]
+                                    ]
+                                , let
+                                    d1 =
+                                        List.map2 (+) model.d1x model.d1y
+
+                                    d2 =
+                                        List.map2 (+) model.d2x model.d2y
+                                  in
+                                  H.div [ A.class "row mt-5" ]
+                                    [ H.div [ A.class "col border border-primary" ]
+                                        [ displayVariance "X1 Variance" model.xs
+                                        , displayVariance "X2 Variance" model.ys
+                                        , displayVariance "D1 Variance" (List.map2 (+) model.d1x model.d1y)
+                                        , displayVariance "D2 Variance" (List.map2 (+) model.d2x model.d2y)
+                                        , H.div [ A.class "row" ]
+                                            [ H.div [ A.class "col" ]
+                                                [ H.label [] [ H.text "Corr(D1,D2)" ]
+                                                , H.p []
+                                                    [ H.text (Round.round 3 (correlation d1 d2))
+                                                    ]
                                                 ]
                                             ]
-                                        ]
-                                    , H.div [ A.class "row" ]
-                                        [ H.div [ A.class "col" ]
-                                            [ H.label [] [ H.text "Covariance Matrix" ]
-                                            , displayMatrix (varCovMatrix model.xs model.ys)
+                                        , H.div [ A.class "row" ]
+                                            [ H.div [ A.class "col" ]
+                                                [ H.label [] [ H.text "Covariance Matrix" ]
+                                                , displayMatrix (varCovMatrix model.xs model.ys)
+                                                ]
                                             ]
                                         ]
                                     ]
@@ -349,9 +379,8 @@ view model =
                         ]
                     ]
                 ]
-            ]
-            :: []
-    }
+    in
+    Document title (body :: [])
 
 
 coefficientInput : String -> (String -> Msg) -> H.Html Msg
