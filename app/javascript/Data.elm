@@ -60,10 +60,10 @@ landCover =
     DataSet
         [ 16.6, 15.9, 27.6, 48.8, 29.2, 57.1, 41.8, 23.0 ]
         [ 47.9, 45.2, 38.8, 25.5, 37.5, 21.1, 27.5, 43.2 ]
-        0.84
-        -0.54
-        1
-        1
+        -0.5468
+        -0.8373
+        -0.8373
+        0.5468
         "Percentages of land of two types in eight English regions"
 
 

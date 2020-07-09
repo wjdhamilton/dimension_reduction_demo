@@ -6,6 +6,7 @@ import Data
 import Html as H
 import Html.Attributes as A
 import Html.Events as E
+import Matrix exposing (Matrix)
 import Maybe.Extra as M
 import Path
 import Round
@@ -174,6 +175,10 @@ update message model =
                 , ys = dataSet.x2
                 , xInput = listToCsv dataSet.x1
                 , yInput = listToCsv dataSet.x2
+                , a11Input = String.fromFloat dataSet.alpha11
+                , a12Input = String.fromFloat dataSet.alpha12
+                , a21Input = String.fromFloat dataSet.alpha21
+                , a22Input = String.fromFloat dataSet.alpha22
                 , d1x = List.map (\x -> x * dataSet.alpha11) dataSet.x1
                 , d1y = List.map (\x -> x * dataSet.alpha12) dataSet.x2
                 , d2x = List.map (\x -> x * dataSet.alpha21) dataSet.x1
@@ -330,6 +335,12 @@ view model =
                                             , H.p []
                                                 [ H.text (Round.round 3 (correlation d1 d2))
                                                 ]
+                                            ]
+                                        ]
+                                    , H.div [ A.class "row" ]
+                                        [ H.div [ A.class "col" ]
+                                            [ H.label [] [ H.text "Covariance Matrix" ]
+                                            , displayMatrix (varCovMatrix model.xs model.ys)
                                             ]
                                         ]
                                     ]
@@ -604,3 +615,31 @@ correlation xs ys =
 std : List Float -> Float
 std =
     Maybe.withDefault 0 << Stats.deviation
+
+
+varCovMatrix : List Float -> List Float -> Matrix
+varCovMatrix x1 x2 =
+    let
+        a =
+            Matrix.mat [ x1, x2 ]
+                |> Matrix.transpose
+
+        n =
+            toFloat (List.length x1)
+
+        s =
+            Matrix.ones ( List.length x1, 1 )
+
+        z =
+            Matrix.add a (Matrix.sMul -1 (Matrix.mul (Matrix.mul s (Matrix.transpose s)) a |> Matrix.sDiv n))
+    in
+    Matrix.sDiv (1 / n) (Matrix.mul (Matrix.transpose z) z)
+
+
+displayMatrix : Matrix -> H.Html Msg
+displayMatrix m =
+    H.div []
+        (List.map
+            (\r -> H.p [] [ H.text (List.foldr (\v s -> Round.round 3 v ++ " " ++ s) "" r) ])
+            (Matrix.to2DList m)
+        )
