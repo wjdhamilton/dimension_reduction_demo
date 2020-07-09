@@ -16,4 +16,4 @@ tmux break-pane
 tmux select-window -t 0
 tmux selectp 3
 
-tmux send-keys 'open http://localhost:3000' enter
+tmux send-keys "open -a 'Google Chrome' http://localhost:3000" enter

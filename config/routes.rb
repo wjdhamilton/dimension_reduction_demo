@@ -3,4 +3,5 @@ Rails.application.routes.draw do
   get 'home', to: 'home#show'
 
   root 'home#show'
+
 end
